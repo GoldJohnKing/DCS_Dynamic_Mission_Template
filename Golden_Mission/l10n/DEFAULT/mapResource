@@ -1,0 +1,4 @@
+mapResource = 
+{
+    ["ResKey_Action_6"] = "Load_Scripts.lua",
+} -- end of mapResource
