@@ -44,7 +44,7 @@ local ZONE_COLOR = {
 
 -- Definitions
 
-local def_zone_list = {
+local zone_list = {
     sharjah = {
         name = "Sharjah",
         side = SIDE.BLUE,
@@ -53,9 +53,40 @@ local def_zone_list = {
         name = "Dubai",
         side = SIDE.RED,
     },
+    alpha = {
+        name = "Alpha",
+        side = SIDE.NEUTRAL,
+    },
+    bravo = {
+        name = "Bravo",
+        side = SIDE.NEUTRAL,
+    },
+    charlie = {
+        name = "Charlie",
+        side = SIDE.NEUTRAL,
+    },
+    delta = {
+        name = "Delta",
+        side = SIDE.NEUTRAL,
+    },
 }
 
 local group_template_list = {
+    -- Air Defense
+    "HQ7",
+    "M6",
+    "SA11",
+    "SA13",
+    "SA15",
+    "SA19",
+    "SA6",
+    "SA8",
+    "SA9",
+    "Gepard",
+    "M163",
+    "ZSU234",
+    "ZSU572",
+
     -- Armory
     "BTR80",
     "BTRRD",
@@ -95,24 +126,15 @@ local group_template_list = {
     "M939",
     "Ural375",
     "Ural4320T",
+
+    -- Infantry
+    "SA18",
+    "Stinger",
 }
 
 -- End of Definitions
 
 -- Zone Initialization
-
-local zone_list = {
-    [SIDE.BLUE] = {
-    },
-    [SIDE.RED] = {
-    },
-    [SIDE.NEUTRAL]= {
-    },
-}
-
-for key, value in pairs(def_zone_list) do
-    table.insert(zone_list[value.side], ZONE:FindByName(value.name))
-end
 
 local zone_set = {
     [SIDE.BLUE] = SET_ZONE:New(),
@@ -120,7 +142,7 @@ local zone_set = {
     [SIDE.NEUTRAL] = SET_ZONE:New(),
 }
 
-for key, value in pairs(def_zone_list) do
+for key, value in pairs(zone_list) do
     zone_set[value.side]:AddZonesByName(value.name)
 end
 
@@ -158,34 +180,38 @@ SET_GROUP:New():AddGroupsByName(group_template_list):ForEachGroup(
 -- Group Spawn
 
 local function on_group_spawn(group, route_target_zone)
-    group:TaskRouteToZone(route_target_zone, true, 30, "Off Road")
+    group:TaskRouteToZone(route_target_zone, true, 100, "Off Road")
 end
 
-local function group_spawn_random(_side)
+local function group_spawn_random(_side, _spawn_zone)
     local _group_prefix = nil
-    local _target_zone_list = nil
+    local _target_zone_set = SET_ZONE:New()
+
+    local function _add_zones_to_set(_zone)
+        _target_zone_set:AddZone(_zone)
+    end
 
     if _side == SIDE.BLUE then
         _group_prefix = "B-"
-        _target_zone_list = zone_list[SIDE.RED]
+        zone_set[SIDE.RED]:ForEachZone(_add_zones_to_set)
     else
         _group_prefix = "R-"
-        _target_zone_list = zone_list[SIDE.BLUE]
+        zone_set[SIDE.BLUE]:ForEachZone(_add_zones_to_set)
     end
 
-    for key, value in pairs(zone_list[SIDE.NEUTRAL]) do
-        table.insert(_target_zone_list, value)
+    zone_set[SIDE.NEUTRAL]:ForEachZone(_add_zones_to_set)
+
+    if _spawn_zone == nil then
+        _spawn_zone = zone_set[_side]:GetRandomZone()
     end
 
     local _spawn_template = get_random(group_template_list)
-    local _spawn_zone = get_random(zone_list[_side])
-
     local _group_count = group_count[_side]
     group_count[_side] = group_count[_side] + 1
 
     local _country = COUNTRY[_side]
     
-    local target_zone = get_random(_target_zone_list)
+    local target_zone = _target_zone_set:GetRandomZone()
 
     _group_prefix = _group_prefix .. _spawn_template .. "-" .. _spawn_zone:GetName() .. "-" .. target_zone:GetName() .. "-" .. _group_count
 
@@ -198,24 +224,28 @@ local function group_spawn_random(_side)
     table.insert(group_list[_side], _group)
 
     -- Debug Message
-    local _side_name = nil
-    if _side == SIDE.BLUE then
-        _side_name = "Blue"
-    else
-        _side_name = "Red"
-    end
-    message_to_all("Debug: " .. _group_prefix .. "has been spawned.\n" .. _side_name .. " side now has " .. #group_list[_side] .. " groups.", 15)
+    -- local _side_name = nil
+    -- if _side == SIDE.BLUE then
+    --     _side_name = "Blue"
+    -- else
+    --     _side_name = "Red"
+    -- end
+    -- message_to_all("Debug: " .. _group_prefix .. "has been spawned.\n" .. _side_name .. " side now has " .. #group_list[_side] .. " groups.", 15)
     -- End of Debug Message
 end
 
-TIMER:New(group_spawn_random, SIDE.BLUE):Start(90, 180)
-TIMER:New(group_spawn_random, SIDE.RED):Start(90, 180)
+TIMER:New(group_spawn_random, SIDE.BLUE):Start(15, 90)
+TIMER:New(group_spawn_random, SIDE.RED):Start(15, 90)
 
 -- End of Group Spawn
 
+-- Startup Group Spawn
+
+-- End of Startup Group Spawn
+
 -- Scheduled Restart
 
-local restart_time = 21600 -- 6 hours -- 10800 = 3 hours
+local restart_time = 86400 -- 21600 -- 6 hours -- 10800 = 3 hours
 local restart_hint_time = { 60, 180, 300, 900 }
 local restart_hint_lasts_time = 90
 
