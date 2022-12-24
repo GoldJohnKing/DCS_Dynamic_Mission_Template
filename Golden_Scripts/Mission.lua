@@ -154,15 +154,12 @@ end
 
 -- Group Initialization
 
-local group_list = {
-    [SIDE.BLUE] = {
-    },
-    [SIDE.RED] = {
-    },
+local group_set = {
+    [SIDE.BLUE] = SET_GROUP:New():FilterActive(true):FilterStart(),
+    [SIDE.RED] = SET_GROUP:New():FilterActive(true):FilterStart(),
 }
 
-local group_count = 
-{
+local group_spawn_index = {
     [SIDE.BLUE] = 0,
     [SIDE.RED] = 0,
 }
@@ -179,11 +176,25 @@ SET_GROUP:New():AddGroupsByName(group_template_list):ForEachGroup(
 
 -- Group Spawn
 
-local function on_group_spawn(group, route_target_zone)
-    group:TaskRouteToZone(route_target_zone, true, 100, "Off Road")
+local function on_group_spawn(_group, _side, _target_zone)
+    group_set[_side]:AddGroup(_group)
+
+    _group:TaskRouteToZone(_target_zone, true, 100, "Off Road")
+
+    function _group:OnEventDead(EventData)
+        -- message_to_all("Group " .. self:GetName() .. " is dead", 60)
+    end
+
+    _group:HandleEvent(EVENTS.Dead)
 end
 
 local function group_spawn_random(_side, _spawn_zone)
+    local _alive_group_count, _alive_unit_count = group_set[_side]:CountAlive()
+
+    if _alive_group_count > 75 or _alive_unit_count > 150 then
+        return
+    end
+
     local _group_prefix = nil
     local _target_zone_set = SET_ZONE:New()
 
@@ -206,40 +217,41 @@ local function group_spawn_random(_side, _spawn_zone)
     end
 
     local _spawn_template = get_random(group_template_list)
-    local _group_count = group_count[_side]
-    group_count[_side] = group_count[_side] + 1
+    local _group_spawn_index = group_spawn_index[_side]
+    group_spawn_index[_side] = group_spawn_index[_side] + 1
 
     local _country = COUNTRY[_side]
     
-    local target_zone = _target_zone_set:GetRandomZone()
+    local _target_zone = _target_zone_set:GetRandomZone()
 
-    _group_prefix = _group_prefix .. _spawn_template .. "-" .. _spawn_zone:GetName() .. "-" .. target_zone:GetName() .. "-" .. _group_count
+    _group_prefix = _group_prefix .. _spawn_template .. "-" .. _spawn_zone:GetName() .. "-" .. _target_zone:GetName() .. "-" .. _group_spawn_index
 
-    local _group = SPAWN:NewWithAlias(_spawn_template, _group_prefix)
+    SPAWN:NewWithAlias(_spawn_template, _group_prefix)
         :InitCoalition(_side)
         :InitCountry(_country)
-        :OnSpawnGroup(on_group_spawn, target_zone)
+        :OnSpawnGroup(on_group_spawn, _side, _target_zone)
         :SpawnInZone(_spawn_zone, true)
-
-    table.insert(group_list[_side], _group)
-
-    -- Debug Message
-    -- local _side_name = nil
-    -- if _side == SIDE.BLUE then
-    --     _side_name = "Blue"
-    -- else
-    --     _side_name = "Red"
-    -- end
-    -- message_to_all("Debug: " .. _group_prefix .. "has been spawned.\n" .. _side_name .. " side now has " .. #group_list[_side] .. " groups.", 15)
-    -- End of Debug Message
 end
 
-TIMER:New(group_spawn_random, SIDE.BLUE):Start(15, 90)
-TIMER:New(group_spawn_random, SIDE.RED):Start(15, 90)
+TIMER:New(group_spawn_random, SIDE.BLUE):Start(5, 30)
+TIMER:New(group_spawn_random, SIDE.RED):Start(5, 30)
 
 -- End of Group Spawn
 
 -- Startup Group Spawn
+
+local function group_spawn_startup()
+    zone_set[SIDE.NEUTRAL]:ForEachZone(
+        function(_zone)
+            for i = 1, 10 do
+                group_spawn_random(SIDE.RED, _zone)
+                group_spawn_random(SIDE.BLUE, _zone)
+            end
+        end
+    )
+end
+
+TIMER:New(group_spawn_startup):Start(5)
 
 -- End of Startup Group Spawn
 
@@ -265,9 +277,9 @@ local server_message_lasts_time = 60
 local server_message_delay = 30
 local server_message_duration = 1800
 local server_message_text = {
-    "欢迎来到 [#1金家寨] <高加索：攻占模式> 服务器！\n\nQQ群：750508967\nKOOK(开黑啦)语音频道：95367853\n\n强烈建议各位玩家加入KOOK语音频道，加强沟通，相互配合，以提升作战效率！\n",
+    "欢迎来到 [#2金家寨] <波斯湾：直升机大混战> 服务器！\n\nQQ群：750508967\nKOOK(开黑啦)语音频道：95367853\n\n强烈建议各位玩家加入KOOK语音频道，加强沟通，相互配合，以提升作战效率！\n",
     "===== 服务器公告 =====\n\n本服务器设有自动封禁系统，攻击友军后请尽快道歉并获取谅解。如果您不幸被自动封禁，请在QQ群内联系老金解封。\n",
-    "本服务器以大规模PVE作战为主要玩法，服务端的运算压力显著高于其他轻量化的PVE或PVP玩法。\n由于硬件性能的限制，本服务器难以承载超过28名玩家同时在线，否则极易发生卡顿和异常。\n",
+    "本服务器以大规模PvPvE作战为主要玩法，服务端的运算压力显著高于其他轻量化的PVE或PVP玩法。\n由于硬件性能的限制，本服务器难以承载超过28名玩家同时在线，否则极易发生卡顿和异常。\n",
     "服务器的日常运营和硬件迭代都离不开庞大的资金支持。如果您觉得本服务器很好玩，欢迎进行赞助！\n请注意，捐助本服务器不会为您带来任何意义上的特权，请理性捐赠，量力而行，谢谢！\n",
 }
 
