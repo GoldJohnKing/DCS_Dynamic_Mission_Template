@@ -44,31 +44,22 @@ local ZONE_COLOR = {
 
 -- Definitions
 
+local side_scores = {
+    [SIDE.BLUE] = 0,
+    [SIDE.RED] = 0,
+}
+
+local side_winning_scores = 3000
+
 local zone_list = {
-    sharjah = {
-        name = "Sharjah",
-        side = SIDE.BLUE,
-    },
-    dubai = {
-        name = "Dubai",
-        side = SIDE.RED,
-    },
-    alpha = {
-        name = "Alpha",
-        side = SIDE.NEUTRAL,
-    },
-    bravo = {
-        name = "Bravo",
-        side = SIDE.NEUTRAL,
-    },
-    charlie = {
-        name = "Charlie",
-        side = SIDE.NEUTRAL,
-    },
-    delta = {
-        name = "Delta",
-        side = SIDE.NEUTRAL,
-    },
+    ["Sharjah"] = SIDE.BLUE,
+    ["Dubai"] = SIDE.RED,
+    ["Alpha"] = SIDE.NEUTRAL,
+    ["Bravo"] = SIDE.NEUTRAL,
+    ["Charlie"] = SIDE.NEUTRAL,
+    ["Delta"] = SIDE.NEUTRAL,
+    ["Echo"] = SIDE.NEUTRAL,
+    ["Foxtrot"] = SIDE.NEUTRAL,
 }
 
 local group_template_list = {
@@ -130,6 +121,12 @@ local group_template_list = {
     -- Infantry
     "SA18",
     "Stinger",
+
+    -- Heli
+    "AH64D",
+    "Ka50",
+    "Ka50_3",
+    "Mi24P",
 }
 
 -- End of Definitions
@@ -143,7 +140,7 @@ local zone_set = {
 }
 
 for key, value in pairs(zone_list) do
-    zone_set[value.side]:AddZonesByName(value.name)
+    zone_set[value]:AddZonesByName(key)
 end
 
 for key, value in pairs(zone_set) do
@@ -179,10 +176,18 @@ SET_GROUP:New():AddGroupsByName(group_template_list):ForEachGroup(
 local function on_group_spawn(_group, _side, _target_zone)
     group_set[_side]:AddGroup(_group)
 
+    -- Group Tasks
     _group:TaskRouteToZone(_target_zone, true, 100, "Off Road")
+    _group:EnRouteTaskEngageTargets(nil, "All")
+
+    -- Group Options
+    -- _group:OptionAlarmStateRed() -- This will cause SAM units stop moving
+    _group:OptionROEWeaponFree()
+    _group:OptionROTEvadeFire()
 
     function _group:OnEventDead(EventData)
         -- message_to_all("Group " .. self:GetName() .. " is dead", 60)
+        group_set[_side]:RemoveGroupsByName(self:GetName())
     end
 
     _group:HandleEvent(EVENTS.Dead)
@@ -192,25 +197,17 @@ local function group_spawn_random(_side, _spawn_zone)
     local _alive_group_count, _alive_unit_count = group_set[_side]:CountAlive()
 
     if _alive_group_count > 75 or _alive_unit_count > 150 then
+        env.info("Group Spawn Limit exceed, _side = " .. _side ..", group = " .. _alive_group_count .. ", unit = " .. _alive_unit_count)
         return
     end
 
     local _group_prefix = nil
-    local _target_zone_set = SET_ZONE:New()
-
-    local function _add_zones_to_set(_zone)
-        _target_zone_set:AddZone(_zone)
-    end
 
     if _side == SIDE.BLUE then
         _group_prefix = "B-"
-        zone_set[SIDE.RED]:ForEachZone(_add_zones_to_set)
     else
         _group_prefix = "R-"
-        zone_set[SIDE.BLUE]:ForEachZone(_add_zones_to_set)
     end
-
-    zone_set[SIDE.NEUTRAL]:ForEachZone(_add_zones_to_set)
 
     if _spawn_zone == nil then
         _spawn_zone = zone_set[_side]:GetRandomZone()
@@ -222,13 +219,15 @@ local function group_spawn_random(_side, _spawn_zone)
 
     local _country = COUNTRY[_side]
     
-    local _target_zone = _target_zone_set:GetRandomZone()
+    local _target_zone = zone_set[SIDE.NEUTRAL]:GetRandomZone()
 
     _group_prefix = _group_prefix .. _spawn_template .. "-" .. _spawn_zone:GetName() .. "-" .. _target_zone:GetName() .. "-" .. _group_spawn_index
 
     SPAWN:NewWithAlias(_spawn_template, _group_prefix)
         :InitCoalition(_side)
         :InitCountry(_country)
+        :InitSkill("Excellent")
+        :InitHeading(0, 359)
         :OnSpawnGroup(on_group_spawn, _side, _target_zone)
         :SpawnInZone(_spawn_zone, true)
 end
@@ -243,9 +242,14 @@ TIMER:New(group_spawn_random, SIDE.RED):Start(5, 30)
 local function group_spawn_startup()
     zone_set[SIDE.NEUTRAL]:ForEachZone(
         function(_zone)
-            for i = 1, 10 do
-                group_spawn_random(SIDE.RED, _zone)
-                group_spawn_random(SIDE.BLUE, _zone)
+            local _side = SIDE.RED
+
+            if math.random(100) > 50 then
+                _side = SIDE.BLUE
+            end
+
+            for i = 1, 5 do
+                group_spawn_random(_side, _zone)
             end
         end
     )
@@ -255,9 +259,98 @@ TIMER:New(group_spawn_startup):Start(5)
 
 -- End of Startup Group Spawn
 
+-- Zone Capture
+
+local function zone_capture()
+    zone_set[SIDE.NEUTRAL]:ForEachZone(
+        function(_zone)
+            _zone:Scan({Object.Category.UNIT}, {Unit.Category.GROUND_UNIT})
+
+            local _side = SIDE.NEUTRAL
+
+            if _zone:IsAllInZoneOfCoalition(SIDE.BLUE) then
+                _side = SIDE.BLUE
+            elseif _zone:IsAllInZoneOfCoalition(SIDE.RED) then
+                _side = SIDE.RED
+            end
+            
+            local _zone_index = _zone:GetName()
+
+            if zone_list[_zone_index] ~= _side then
+                zone_list[_zone_index] = _side
+                _zone:UndrawZone()
+                _zone:DrawZone(-1, { 1, 1, 1 }, 1, ZONE_COLOR[zone_list[_zone_index]], 0.25, 1, false)
+            end
+        end
+    )
+end
+
+TIMER:New(zone_capture):Start(15, 30)
+
+-- End of Zone Capture
+
+-- Side Scores
+
+local function calculate_side_scores()
+    local _captured_zones = {
+        [SIDE.BLUE] = 0,
+        [SIDE.RED] = 0,
+        [SIDE.NEUTRAL] = 0,
+    }
+
+    for key, value in pairs(zone_list) do
+        _captured_zones[value] = _captured_zones[value] + 1
+    end
+
+    for key, value in pairs(side_scores) do
+        side_scores[key] = side_scores[key] + 10 * _captured_zones[key]
+    end
+
+    message_to_all(
+        "=== 阵营得分状态 ===\n" ..
+        "\n[蓝方]" ..
+        "\n - 占领区数量: " .. _captured_zones[SIDE.BLUE] ..
+        "\n - 每分钟固定收益: " .. 5 * _captured_zones[SIDE.BLUE] ..
+        "\n - 当前积分: " .. side_scores[SIDE.BLUE] ..
+        "\n" ..
+        "\n[红方]" ..
+        "\n - 占领区数量: " .. _captured_zones[SIDE.RED] ..
+        "\n - 每分钟固定收益: " .. 5 * _captured_zones[SIDE.RED] ..
+        "\n - 当前积分: " .. side_scores[SIDE.RED] ..
+        "\n" ..
+        "\n中立区数量: " .. _captured_zones[SIDE.NEUTRAL] ..
+        "\n" ..
+        "\n阵营胜利所需积分: " .. side_winning_scores,
+        60
+    )
+
+    local _blue_win = side_scores[SIDE.BLUE] > side_winning_scores
+    local _red_win = side_scores[SIDE.RED] > side_winning_scores
+    local _mission_end = true
+
+    if _blue_win and _red_win then
+        message_to_all("=== 双方平局 ===", 60)
+    elseif _blue_win then
+        message_to_all("=== 蓝方胜利 ===", 60)
+    elseif _red_win then
+        message_to_all("=== 红方胜利 ===", 60)
+    else
+        _mission_end = false
+    end
+
+    if _mission_end then
+        message_to_all("任务完成！服务器即将重启！", 60)
+        USERFLAG:New("FlagRestart"):Set(true, 30)
+    end
+end
+
+TIMER:New(calculate_side_scores):Start(15, 60)
+
+-- End of Side Scores
+
 -- Scheduled Restart
 
-local restart_time = 86400 -- 21600 -- 6 hours -- 10800 = 3 hours
+local restart_time = 14400 -- 4 hours -- 10800 = 3 hours
 local restart_hint_time = { 60, 180, 300, 900 }
 local restart_hint_lasts_time = 90
 
@@ -267,7 +360,7 @@ end
 
 TIMER:New(message_to_all, "服务器即将定时重启！", restart_hint_lasts_time):Start(restart_time - 15)
 
-USERFLAG:New("FlagScheduledRestart"):Set(false):Set(true, restart_time)
+USERFLAG:New("FlagRestart"):Set(true, restart_time)
 
 -- End of Scheduled Restart
 
