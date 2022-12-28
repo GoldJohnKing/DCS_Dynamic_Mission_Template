@@ -173,7 +173,7 @@ SET_GROUP:New():AddGroupsByName(group_template):ForEachGroup(
 
 -- Group Spawn
 
-local function on_group_spawn(_group, _side, _target_zone)
+local function on_group_spawn(_group, _side, _spawn_zone, _target_zone)
     group_set[_side]:AddGroup(_group)
 
     -- Group Tasks
@@ -191,6 +191,24 @@ local function on_group_spawn(_group, _side, _target_zone)
     end
 
     _group:HandleEvent(EVENTS.Dead)
+
+    -- Group Spawn as Immortal
+    _group:SetCommandImmortal(true)
+    TIMER:New(
+        function()
+            _group:SetCommandImmortal(false)
+        end
+    ):Start(15)
+
+    -- Group Stuck Detection
+    TIMER:New(
+        function()
+            if _group:IsInZone(_spawn_zone) then
+                env.info("Group " .. _group:GetName() .. " is stuck in zone " .. _spawn_zone:GetName())
+                _group:Destroy(false)
+            end
+        end
+    ):Start(300)
 end
 
 local function group_spawn_random(_side, _spawn_zone)
@@ -213,6 +231,16 @@ local function group_spawn_random(_side, _spawn_zone)
         _spawn_zone = zone_set[_side]:GetRandomZone()
     end
 
+    local _spawn_area_set = SET_ZONE:New():FilterPrefixes(_spawn_zone:GetName() .. "_Spawn_"):FilterOnce()
+
+    local _spawn_area = nil
+    
+    if _spawn_area_set:Count() ~= 0 then
+        _spawn_area = _spawn_area_set:GetRandomZone()
+    else
+        _spawn_area = _spawn_zone
+    end
+
     local _spawn_template = get_random(group_template)
     local _group_spawn_index = group_spawn_index[_side]
     group_spawn_index[_side] = group_spawn_index[_side] + 1
@@ -228,8 +256,8 @@ local function group_spawn_random(_side, _spawn_zone)
         :InitCountry(_country)
         :InitSkill("Excellent")
         :InitHeading(0, 359)
-        :OnSpawnGroup(on_group_spawn, _side, _target_zone)
-        :SpawnInZone(_spawn_zone, true)
+        :OnSpawnGroup(on_group_spawn, _side, _spawn_zone, _target_zone)
+        :SpawnInZone(_spawn_area, true)
 end
 
 TIMER:New(group_spawn_random, SIDE.BLUE):Start(5, 30)
