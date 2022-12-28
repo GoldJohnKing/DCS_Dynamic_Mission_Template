@@ -19,7 +19,7 @@ end
 
 -- End of Utils
 
-message_to_all("Mission.lua Loading", 30) -- Debug
+message_to_all("Mission.lua Loading", 3) -- Debug
 
 -- Enums
 
@@ -49,7 +49,7 @@ local side_scores = {
     [SIDE.RED] = 0,
 }
 
-local side_winning_scores = 3000
+local side_winning_scores = 5000
 
 local zone_list = {
     ["Sharjah"] = SIDE.BLUE,
@@ -62,7 +62,7 @@ local zone_list = {
     ["Foxtrot"] = SIDE.NEUTRAL,
 }
 
-local group_template_list = {
+local group_template = {
     -- Air Defense
     "HQ7",
     "M6",
@@ -163,7 +163,7 @@ local group_spawn_index = {
 
 -- Destroy all groups templates at mission start
 
-SET_GROUP:New():AddGroupsByName(group_template_list):ForEachGroup(
+SET_GROUP:New():AddGroupsByName(group_template):ForEachGroup(
     function(group)
         group:Destroy(false)
     end
@@ -177,8 +177,8 @@ local function on_group_spawn(_group, _side, _target_zone)
     group_set[_side]:AddGroup(_group)
 
     -- Group Tasks
-    _group:TaskRouteToZone(_target_zone, true, 100, "Off Road")
-    _group:EnRouteTaskEngageTargets(nil, "All")
+    _group:TaskRouteToZone(_target_zone, true, 100, "On Road")
+    _group:EnRouteTaskEngageTargets(10000, "All")
 
     -- Group Options
     -- _group:OptionAlarmStateRed() -- This will cause SAM units stop moving
@@ -213,7 +213,7 @@ local function group_spawn_random(_side, _spawn_zone)
         _spawn_zone = zone_set[_side]:GetRandomZone()
     end
 
-    local _spawn_template = get_random(group_template_list)
+    local _spawn_template = get_random(group_template)
     local _group_spawn_index = group_spawn_index[_side]
     group_spawn_index[_side] = group_spawn_index[_side] + 1
 
@@ -240,17 +240,20 @@ TIMER:New(group_spawn_random, SIDE.RED):Start(5, 30)
 -- Startup Group Spawn
 
 local function group_spawn_startup()
+    local _count = 0
     zone_set[SIDE.NEUTRAL]:ForEachZone(
         function(_zone)
             local _side = SIDE.RED
 
-            if math.random(100) > 50 then
+            if _count < zone_set[SIDE.NEUTRAL]:Count() / 2 then
                 _side = SIDE.BLUE
             end
 
             for i = 1, 5 do
                 group_spawn_random(_side, _zone)
             end
+
+            _count = _count + 1
         end
     )
 end
@@ -289,6 +292,38 @@ TIMER:New(zone_capture):Start(15, 30)
 
 -- End of Zone Capture
 
+-- Base Protect
+
+local client_set = SET_CLIENT:New():FilterActive(true):FilterStart()
+
+local function base_protect()
+    local function _check_client_side(_client, _zone, _zone_side)
+        if _client:GetCoalition() ~= _zone_side then
+            MESSAGE:New("请立即离开敌军基地！否则您将在15秒后被强制摧毁！"):ToClient(_client, 15)
+
+            TIMER:New(
+                function()
+                    if _client:IsInZone(_zone) then
+                        _client:Destroy(true)
+                    end
+                end
+            ):Start(15)
+        end
+    end
+
+    for key, value in pairs({SIDE.BLUE, SIDE.RED}) do
+        zone_set[value]:ForEachZone(
+            function(_zone)
+                client_set:ForEachClientInZone(_zone, _check_client_side, _zone, value)
+            end
+        )
+    end
+end
+
+TIMER:New(base_protect):Start(90, 30)
+
+-- End of Base Protect
+
 -- Side Scores
 
 local function calculate_side_scores()
@@ -311,17 +346,17 @@ local function calculate_side_scores()
         "\n[蓝方]" ..
         "\n - 占领区数量: " .. _captured_zones[SIDE.BLUE] ..
         "\n - 每分钟固定收益: " .. 5 * _captured_zones[SIDE.BLUE] ..
-        "\n - 当前积分: " .. side_scores[SIDE.BLUE] ..
+        "\n - 当前总得分: " .. side_scores[SIDE.BLUE] ..
         "\n" ..
         "\n[红方]" ..
         "\n - 占领区数量: " .. _captured_zones[SIDE.RED] ..
         "\n - 每分钟固定收益: " .. 5 * _captured_zones[SIDE.RED] ..
-        "\n - 当前积分: " .. side_scores[SIDE.RED] ..
+        "\n - 当前总得分: " .. side_scores[SIDE.RED] ..
         "\n" ..
         "\n中立区数量: " .. _captured_zones[SIDE.NEUTRAL] ..
         "\n" ..
-        "\n阵营胜利所需积分: " .. side_winning_scores,
-        60
+        "\n阵营胜利所需得分: " .. side_winning_scores,
+        58
     )
 
     local _blue_win = side_scores[SIDE.BLUE] > side_winning_scores
@@ -383,4 +418,4 @@ end
 
 -- End of Server Message
 
-message_to_all("Mission.lua Loaded", 30) -- Debug
+message_to_all("Mission.lua Loaded", 3) -- Debug
