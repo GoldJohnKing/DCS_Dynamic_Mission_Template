@@ -145,6 +145,13 @@ end
 
 for key, value in pairs(zone_set) do
     value:DrawZone(-1, { 1, 1, 1 }, 1, ZONE_COLOR[key], 0.25, 1, true)
+    
+    -- TODO Draw Zone Names
+    -- value:ForEachZone(
+    --     function(_zone)
+    --         MARKER:New(_zone:GetCoordinate(), _zone:GetName()):ToAll()
+    --     end
+    -- )
 end
 
 -- End of Zone Initialization
@@ -173,7 +180,7 @@ SET_GROUP:New():AddGroupsByName(group_template):ForEachGroup(
 
 -- Group Spawn
 
-local function on_group_spawn(_group, _side, _spawn_zone, _target_zone)
+local function on_group_spawn(_group, _side, _spawn_zone, _spawn_area, _target_zone)
     group_set[_side]:AddGroup(_group)
 
     -- Group Tasks
@@ -181,16 +188,33 @@ local function on_group_spawn(_group, _side, _spawn_zone, _target_zone)
     _group:EnRouteTaskEngageTargets(10000, "All")
 
     -- Group Options
-    -- _group:OptionAlarmStateRed() -- This will cause SAM units stop moving
     _group:OptionROEWeaponFree()
     _group:OptionROTEvadeFire()
 
+    -- Handle Dead Events
     function _group:OnEventDead(EventData)
         -- message_to_all("Group " .. self:GetName() .. " is dead", 60)
         group_set[_side]:RemoveGroupsByName(self:GetName())
     end
 
     _group:HandleEvent(EVENTS.Dead)
+
+    -- Specific Tasks, Options and Events for Air Groups
+    if _group:IsAir() then
+        _group:TaskLandAtZone(ZONE:FindByName(zone_set[_side]:GetRandom():GetName()), 15, true)
+
+        _group:OptionAlarmStateRed() -- Do not assign this to SAM units as it will make them stop moving
+
+        function _group:OnEventLand(EventData)
+            TIMER:New(
+                function()
+                    self:Destroy()
+                end
+            ):Start(30)
+        end
+
+        _group:HandleEvent(EVENTS.Land)
+    end
 
     -- Group Spawn as Immortal
     _group:SetCommandImmortal(true)
@@ -203,15 +227,15 @@ local function on_group_spawn(_group, _side, _spawn_zone, _target_zone)
     -- Group Stuck Detection
     TIMER:New(
         function()
-            if _group:IsInZone(_spawn_zone) then
-                env.info("Group " .. _group:GetName() .. " is stuck in zone " .. _spawn_zone:GetName())
+            if _group:IsInZone(_spawn_area) then
+                env.info("Group " .. _group:GetName() .. " is stuck in zone " .. _spawn_area:GetName())
                 _group:Destroy(false)
             end
         end
-    ):Start(300)
+    ):Start(180)
 end
 
-local function group_spawn_random(_side, _spawn_zone)
+local function group_spawn_random(_side, _spawn_zone, _target_zone)
     local _alive_group_count, _alive_unit_count = group_set[_side]:CountAlive()
 
     if _alive_group_count > 75 or _alive_unit_count > 150 then
@@ -247,7 +271,9 @@ local function group_spawn_random(_side, _spawn_zone)
 
     local _country = COUNTRY[_side]
     
-    local _target_zone = zone_set[SIDE.NEUTRAL]:GetRandomZone()
+    if _target_zone == nil then
+        _target_zone = zone_set[SIDE.NEUTRAL]:GetRandomZone()
+    end
 
     _group_prefix = _group_prefix .. _spawn_template .. "-" .. _spawn_zone:GetName() .. "-" .. _target_zone:GetName() .. "-" .. _group_spawn_index
 
@@ -256,7 +282,7 @@ local function group_spawn_random(_side, _spawn_zone)
         :InitCountry(_country)
         :InitSkill("Excellent")
         :InitHeading(0, 359)
-        :OnSpawnGroup(on_group_spawn, _side, _spawn_zone, _target_zone)
+        :OnSpawnGroup(on_group_spawn, _side, _spawn_zone, _spawn_area, _target_zone)
         :SpawnInZone(_spawn_area, true)
 end
 
@@ -278,7 +304,7 @@ local function group_spawn_startup()
             end
 
             for i = 1, 5 do
-                group_spawn_random(_side, _zone)
+                group_spawn_random(_side, _zone, _zone)
             end
 
             _count = _count + 1
