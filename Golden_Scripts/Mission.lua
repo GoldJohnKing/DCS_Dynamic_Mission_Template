@@ -17,6 +17,14 @@ local function message_to_all(_text, _lasts_time)
     MESSAGE:New(_text, _lasts_time):ToAll()
 end
 
+local function destroy_groups(_group_names)
+    SET_GROUP:New():AddGroupsByName(_group_names):ForEachGroup(
+        function(_group)
+            _group:Destroy(false)
+        end
+    )
+end
+
 -- End of Utils
 
 message_to_all("Mission.lua Loading", 3) -- Debug
@@ -38,6 +46,12 @@ local ZONE_COLOR = {
     [SIDE.BLUE] = { 0, 0, 0.8 },
     [SIDE.RED] = { 0.8, 0, 0 },
     [SIDE.NEUTRAL] = { 0.8, 0.8, 0.8 },
+}
+
+local GROUP_TYPE = {
+    GROUND = 0,
+    HELI = 1, 
+    PLANE = 2,
 }
 
 -- End of Enums
@@ -63,70 +77,83 @@ local zone_list = {
 }
 
 local group_template = {
-    -- Air Defense
+    [GROUP_TYPE.GROUND] = {
+        -- Air Defense
+        -- "HQ7",
+        "Avenger",
+        "Bradley",
+        "Roland",
+        -- "SA11",
+        "SA13",
+        -- "SA15",
+        "SA19",
+        -- "SA6",
+        -- "SA8",
+        "SA9",
+        "Gepard",
+        "M163",
+        "ZSU234",
+        "ZSU572",
+
+        -- Armory
+        "BTR80",
+        "BTRRD",
+        "HMMWV",
+        "BMP3",
+        "BTR82A",
+        "M1126",
+        "M2A2",
+        "Warrior",
+        "Challenger",
+        "Leclerc",
+        "Leopard2A6M",
+        "M1A2",
+        "MerkavaIV",
+        "T72B3",
+        "T80U",
+        "T90",
+        "Type59",
+        "StrykerMGS",
+        "ZBD04A",
+        "ZTZ96B",
+
+        -- Artillery
+        "BM27",
+        "BM21",
+        "PLZ05",
+        "2S3",
+        "M109",
+        "2S9",
+
+        -- Unarmed
+        "Tigr",
+        "M978",
+        "GAZ66",
+        "KAMAZ43101",
+        "KrAZ6322",
+        "M939",
+        "Ural375",
+        "Ural4320T",
+
+        -- Infantry
+        "SA18",
+        "Stinger",
+    },
+    [GROUP_TYPE.HELI] = {
+        -- Heli
+        "AH64D",
+        "Ka50",
+        "Ka50_3",
+        "Mi24P",
+    },
+}
+
+local group_template_disabled = {
     "HQ7",
-    "M6",
     "SA11",
-    "SA13",
     "SA15",
-    "SA19",
     "SA6",
     "SA8",
-    "SA9",
-    "Gepard",
-    "M163",
-    "ZSU234",
-    "ZSU572",
-
-    -- Armory
-    "BTR80",
-    "BTRRD",
-    "HMMWV",
-    "BMP3",
-    "BTR82A",
-    "M1126",
-    "M2A2",
-    "Warrior",
-    "Challenger",
-    "Leclerc",
-    "Leopard2A6M",
-    "M1A2",
-    "MerkavaIV",
-    "T72B3",
-    "T80U",
-    "T90",
-    "Type59",
-    "StrykerMGS",
-    "ZBD04A",
-    "ZTZ96B",
-
-    -- Artillery
-    "BM27",
-    "BM21",
-    "PLZ05",
-    "2S3",
-    "M109",
-    "2S9",
-
-    -- Unarmed
-    "Tigr",
-    "M978",
-    "GAZ66",
-    "KAMAZ43101",
-    "KrAZ6322",
-    "M939",
-    "Ural375",
-    "Ural4320T",
-
-    -- Infantry
-    "SA18",
-    "Stinger",
-
-    -- Heli
-    "AH64D",
-    "Ka50",
-    "Ka50_3",
-    "Mi24P",
 }
 
 -- End of Definitions
@@ -170,11 +197,11 @@ local group_spawn_index = {
 
 -- Destroy all groups templates at mission start
 
-SET_GROUP:New():AddGroupsByName(group_template):ForEachGroup(
-    function(group)
-        group:Destroy(false)
-    end
-)
+for key, value in pairs(GROUP_TYPE) do
+    destroy_groups(group_template[value])
+end
+
+destroy_groups(group_template_disabled)
 
 -- End of Group Initialization
 
@@ -193,8 +220,8 @@ local function on_group_spawn(_group, _side, _spawn_zone, _spawn_area, _target_z
 
     -- Handle Dead Events
     function _group:OnEventDead(EventData)
-        -- message_to_all("Group " .. self:GetName() .. " is dead", 60)
-        group_set[_side]:RemoveGroupsByName(self:GetName())
+        -- group_set[_side]:RemoveGroupsByName(self:GetName())
+        -- TODO Add Scores to Players
     end
 
     _group:HandleEvent(EVENTS.Dead)
@@ -208,7 +235,7 @@ local function on_group_spawn(_group, _side, _spawn_zone, _spawn_area, _target_z
         function _group:OnEventLand(EventData)
             TIMER:New(
                 function()
-                    self:Destroy()
+                    self:Destroy(false)
                 end
             ):Start(30)
         end
@@ -235,11 +262,15 @@ local function on_group_spawn(_group, _side, _spawn_zone, _spawn_area, _target_z
     ):Start(180)
 end
 
-local function group_spawn_random(_side, _spawn_zone, _target_zone)
+local function group_spawn_random(_side, _type, _spawn_zone, _target_zone)
     local _alive_group_count, _alive_unit_count = group_set[_side]:CountAlive()
 
-    if _alive_group_count > 75 or _alive_unit_count > 150 then
-        env.info("Group Spawn Limit exceed, _side = " .. _side ..", group = " .. _alive_group_count .. ", unit = " .. _alive_unit_count)
+    if _alive_group_count > 150 or _alive_unit_count > 300 then
+        local _side_name = "Blue"
+        if _side == SIDE.RED then
+            _side_name = "RED"
+        end
+        env.info("Group Spawn Limit exceed, _side = " .. _side_name ..", group = " .. _alive_group_count .. ", unit = " .. _alive_unit_count)
         return
     end
 
@@ -265,7 +296,7 @@ local function group_spawn_random(_side, _spawn_zone, _target_zone)
         _spawn_area = _spawn_zone
     end
 
-    local _spawn_template = get_random(group_template)
+    local _spawn_template = get_random(group_template[_type])
     local _group_spawn_index = group_spawn_index[_side]
     group_spawn_index[_side] = group_spawn_index[_side] + 1
 
@@ -286,8 +317,11 @@ local function group_spawn_random(_side, _spawn_zone, _target_zone)
         :SpawnInZone(_spawn_area, true)
 end
 
-TIMER:New(group_spawn_random, SIDE.BLUE):Start(5, 30)
-TIMER:New(group_spawn_random, SIDE.RED):Start(5, 30)
+TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.GROUND):Start(5, 60)
+TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.GROUND):Start(5, 60)
+
+TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI):Start(90, 180)
+TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI):Start(90, 180)
 
 -- End of Group Spawn
 
@@ -304,7 +338,7 @@ local function group_spawn_startup()
             end
 
             for i = 1, 5 do
-                group_spawn_random(_side, _zone, _zone)
+                group_spawn_random(_side, GROUP_TYPE.GROUND, _zone, _zone)
             end
 
             _count = _count + 1
@@ -342,7 +376,7 @@ local function zone_capture()
     )
 end
 
-TIMER:New(zone_capture):Start(15, 30)
+TIMER:New(zone_capture):Start(5, 30)
 
 -- End of Zone Capture
 
