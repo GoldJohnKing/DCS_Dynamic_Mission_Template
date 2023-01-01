@@ -1,40 +1,17 @@
 local table = table
 local math = math
 
--- Utils
-
-local function get_random(tb)
-    local keys = {}
-
-    for key, vaule in pairs(tb) do
-        table.insert(keys, key)
-    end
-
-    return tb[keys[math.random(#keys)]]
-end
-
-local function message_to_all(_text, _lasts_time)
-    MESSAGE:New(_text, _lasts_time):ToAll()
-end
-
-local function destroy_groups(_group_names)
-    SET_GROUP:New():AddGroupsByName(_group_names):ForEachGroup(
-        function(_group)
-            _group:Destroy(false)
-        end
-    )
-end
-
--- End of Utils
-
-message_to_all("Mission.lua Loading", 3) -- Debug
-
 -- Enums
 
 local SIDE = {
     BLUE = coalition.side.BLUE,
     RED = coalition.side.RED,
     NEUTRAL = coalition.side.NEUTRAL,
+}
+
+local SIDE_ENEMY = {
+    [SIDE.BLUE] = SIDE.RED,
+    [SIDE.RED] = SIDE.BLUE,
 }
 
 local COUNTRY = {
@@ -49,12 +26,102 @@ local ZONE_COLOR = {
 }
 
 local GROUP_TYPE = {
-    GROUND = 0,
-    HELI = 1, 
-    PLANE = 2,
+    GROUND_ATTACK = 0,
+    GROUND_DEFENSE = 1,
+    GROUND_TRANSPORT = 2,
+    HELI_ATTACK = 3,
+    HELI_TRANSPORT = 4,
+    PLANE = 5,
+}
+
+local NAME_PREFIX = {
+    [SIDE.BLUE] = "B",
+    [SIDE.RED] = "R",
 }
 
 -- End of Enums
+
+-- Utils
+
+local function get_random(tb)
+    local keys = {}
+
+    for key, vaule in pairs(tb) do
+        table.insert(keys, key)
+    end
+
+    return tb[keys[math.random(#keys)]]
+end
+
+local function message_to_all(_text, _lasts_time)
+    if _lasts_time == nil then
+        _lasts_time = 90
+    end
+
+    MESSAGE:New(_text, _lasts_time):ToAll()
+end
+
+local function log(_string)
+    env.info("[GJK] " .. _string)
+end
+
+local function draw_zones(_zones)
+    for key, value in pairs(_zones) do
+        ZONE:FindByName(key):DrawZone(-1, { 1, 1, 1 }, 1, ZONE_COLOR[value], 0.25, 1, false)
+    end
+end
+
+local function get_all_zones(_zones)
+    local _set_zones = {
+        [SIDE.BLUE] = SET_ZONE:New(),
+        [SIDE.RED] = SET_ZONE:New(),
+        [SIDE.NEUTRAL] = SET_ZONE:New(),
+    }
+    
+    for key, value in pairs(_zones) do
+        _set_zones[value]:AddZonesByName(key)
+    end
+
+    return _set_zones
+end
+
+local function combine_set_zones(_set_zones_table)
+    local _set_zones = SET_ZONE:New()
+    for key, value in pairs(_set_zones_table) do
+        value:ForEachZone(
+            function(_zone)
+                _set_zones:AddZone(_zone)
+            end
+        )
+    end
+    return _set_zones
+end
+
+local function destroy_groups(_group_names)
+    SET_GROUP:New():AddGroupsByName(_group_names):ForEachGroup(
+        function(_group)
+            _group:Destroy(false)
+        end
+    )
+end
+
+local function group_task_land_at_zone(_group, _landing_zone)
+    local _task_land = {
+        id = 'Land',
+        params = {
+            point = _landing_zone:GetRandomVec2(),
+        }
+    }
+
+    local _waypoint = _landing_zone:GetCoordinate():WaypointAirTurningPoint()
+
+    _group:SetTaskWaypoint(_waypoint, _task_land)
+    _group:Route({_waypoint}, 1)
+end
+
+-- End of Utils
+
+message_to_all("Mission.lua Loading", 3) -- Debug
 
 -- Definitions
 
@@ -65,333 +132,37 @@ local side_scores = {
 
 local side_winning_scores = 5000
 
-local zone_list = {
-    ["Sharjah"] = SIDE.BLUE,
+local airports = {
     ["Dubai"] = SIDE.RED,
-    ["Alpha"] = SIDE.NEUTRAL,
-    ["Bravo"] = SIDE.NEUTRAL,
+    ["Minhad"] = SIDE.BLUE,
+}
+
+local zones = {
+    ["Alpha"] = SIDE.RED,
+    ["Bravo"] = SIDE.RED,
     ["Charlie"] = SIDE.NEUTRAL,
-    ["Delta"] = SIDE.NEUTRAL,
-    ["Echo"] = SIDE.NEUTRAL,
-    ["Foxtrot"] = SIDE.NEUTRAL,
-}
-
-local group_template = {
-    [GROUP_TYPE.GROUND] = {
-        -- Air Defense
-        -- "HQ7",
-        "Avenger",
-        "Bradley",
-        "Roland",
-        -- "SA11",
-        "SA13",
-        -- "SA15",
-        "SA19",
-        -- "SA6",
-        -- "SA8",
-        "SA9",
-        "Gepard",
-        "M163",
-        "ZSU234",
-        "ZSU572",
-
-        -- Armory
-        "BTR80",
-        "BTRRD",
-        "HMMWV",
-        "BMP3",
-        "BTR82A",
-        "M1126",
-        "M2A2",
-        "Warrior",
-        "Challenger",
-        "Leclerc",
-        "Leopard2A6M",
-        "M1A2",
-        "MerkavaIV",
-        "T72B3",
-        "T80U",
-        "T90",
-        "Type59",
-        "StrykerMGS",
-        "ZBD04A",
-        "ZTZ96B",
-
-        -- Artillery
-        "BM27",
-        "BM21",
-        "PLZ05",
-        "2S3",
-        "M109",
-        "2S9",
-
-        -- Unarmed
-        "Tigr",
-        "M978",
-        "GAZ66",
-        "KAMAZ43101",
-        "KrAZ6322",
-        "M939",
-        "Ural375",
-        "Ural4320T",
-
-        -- Infantry
-        "SA18",
-        "Stinger",
-    },
-    [GROUP_TYPE.HELI] = {
-        -- Heli
-        "AH64D",
-        "Ka50",
-        "Ka50_3",
-        "Mi24P",
-    },
-}
-
-local group_template_disabled = {
-    "HQ7",
-    "SA11",
-    "SA15",
-    "SA6",
-    "SA8",
+    ["Delta"] = SIDE.BLUE,
+    ["Echo"] = SIDE.BLUE,
 }
 
 -- End of Definitions
 
--- Zone Initialization
+-- Airports
 
-local zone_set = {
-    [SIDE.BLUE] = SET_ZONE:New(),
-    [SIDE.RED] = SET_ZONE:New(),
-    [SIDE.NEUTRAL] = SET_ZONE:New(),
-}
+-- Draw airport zones
+draw_zones(airports)
 
-for key, value in pairs(zone_list) do
-    zone_set[value]:AddZonesByName(key)
-end
-
-for key, value in pairs(zone_set) do
-    value:DrawZone(-1, { 1, 1, 1 }, 1, ZONE_COLOR[key], 0.25, 1, true)
-    
-    -- TODO Draw Zone Names
-    -- value:ForEachZone(
-    --     function(_zone)
-    --         MARKER:New(_zone:GetCoordinate(), _zone:GetName()):ToAll()
-    --     end
-    -- )
-end
-
--- End of Zone Initialization
-
--- Group Initialization
-
-local group_set = {
-    [SIDE.BLUE] = SET_GROUP:New():FilterActive(true):FilterStart(),
-    [SIDE.RED] = SET_GROUP:New():FilterActive(true):FilterStart(),
-}
-
-local group_spawn_index = {
-    [SIDE.BLUE] = 0,
-    [SIDE.RED] = 0,
-}
-
--- Destroy all groups templates at mission start
-
-for key, value in pairs(GROUP_TYPE) do
-    destroy_groups(group_template[value])
-end
-
-destroy_groups(group_template_disabled)
-
--- End of Group Initialization
-
--- Group Spawn
-
-local function on_group_spawn(_group, _side, _spawn_zone, _spawn_area, _target_zone)
-    group_set[_side]:AddGroup(_group)
-
-    -- Group Tasks
-    _group:TaskRouteToZone(_target_zone, true, 100, "On Road")
-    _group:EnRouteTaskEngageTargets(10000, "All")
-
-    -- Group Options
-    _group:OptionROEWeaponFree()
-    _group:OptionROTEvadeFire()
-
-    -- Handle Dead Events
-    function _group:OnEventDead(EventData)
-        -- group_set[_side]:RemoveGroupsByName(self:GetName())
-        -- TODO Add Scores to Players
-    end
-
-    _group:HandleEvent(EVENTS.Dead)
-
-    -- Specific Tasks, Options and Events for Air Groups
-    if _group:IsAir() then
-        _group:TaskLandAtZone(ZONE:FindByName(zone_set[_side]:GetRandom():GetName()), 15, true)
-
-        _group:OptionAlarmStateRed() -- Do not assign this to SAM units as it will make them stop moving
-
-        function _group:OnEventLand(EventData)
-            TIMER:New(
-                function()
-                    self:Destroy(false)
-                end
-            ):Start(30)
-        end
-
-        _group:HandleEvent(EVENTS.Land)
-    end
-
-    -- Group Spawn as Immortal
-    _group:SetCommandImmortal(true)
-    TIMER:New(
-        function()
-            _group:SetCommandImmortal(false)
-        end
-    ):Start(15)
-
-    -- Group Stuck Detection
-    TIMER:New(
-        function()
-            if _group:IsInZone(_spawn_area) then
-                env.info("Group " .. _group:GetName() .. " is stuck in zone " .. _spawn_area:GetName())
-                _group:Destroy(false)
-            end
-        end
-    ):Start(180)
-end
-
-local function group_spawn_random(_side, _type, _spawn_zone, _target_zone)
-    local _alive_group_count, _alive_unit_count = group_set[_side]:CountAlive()
-
-    if _alive_group_count > 150 or _alive_unit_count > 300 then
-        local _side_name = "Blue"
-        if _side == SIDE.RED then
-            _side_name = "RED"
-        end
-        env.info("Group Spawn Limit exceed, _side = " .. _side_name ..", group = " .. _alive_group_count .. ", unit = " .. _alive_unit_count)
-        return
-    end
-
-    local _group_prefix = nil
-
-    if _side == SIDE.BLUE then
-        _group_prefix = "B-"
-    else
-        _group_prefix = "R-"
-    end
-
-    if _spawn_zone == nil then
-        _spawn_zone = zone_set[_side]:GetRandomZone()
-    end
-
-    local _spawn_area_set = SET_ZONE:New():FilterPrefixes(_spawn_zone:GetName() .. "_Spawn_"):FilterOnce()
-
-    local _spawn_area = nil
-    
-    if _spawn_area_set:Count() ~= 0 then
-        _spawn_area = _spawn_area_set:GetRandomZone()
-    else
-        _spawn_area = _spawn_zone
-    end
-
-    local _spawn_template = get_random(group_template[_type])
-    local _group_spawn_index = group_spawn_index[_side]
-    group_spawn_index[_side] = group_spawn_index[_side] + 1
-
-    local _country = COUNTRY[_side]
-    
-    if _target_zone == nil then
-        _target_zone = zone_set[SIDE.NEUTRAL]:GetRandomZone()
-    end
-
-    _group_prefix = _group_prefix .. _spawn_template .. "-" .. _spawn_zone:GetName() .. "-" .. _target_zone:GetName() .. "-" .. _group_spawn_index
-
-    SPAWN:NewWithAlias(_spawn_template, _group_prefix)
-        :InitCoalition(_side)
-        :InitCountry(_country)
-        :InitSkill("Excellent")
-        :InitHeading(0, 359)
-        :OnSpawnGroup(on_group_spawn, _side, _spawn_zone, _spawn_area, _target_zone)
-        :SpawnInZone(_spawn_area, true)
-end
-
-TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.GROUND):Start(5, 60)
-TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.GROUND):Start(5, 60)
-
-TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI):Start(90, 180)
-TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI):Start(90, 180)
-
--- End of Group Spawn
-
--- Startup Group Spawn
-
-local function group_spawn_startup()
-    local _count = 0
-    zone_set[SIDE.NEUTRAL]:ForEachZone(
-        function(_zone)
-            local _side = SIDE.RED
-
-            if _count < zone_set[SIDE.NEUTRAL]:Count() / 2 then
-                _side = SIDE.BLUE
-            end
-
-            for i = 1, 5 do
-                group_spawn_random(_side, GROUP_TYPE.GROUND, _zone, _zone)
-            end
-
-            _count = _count + 1
-        end
-    )
-end
-
-TIMER:New(group_spawn_startup):Start(5)
-
--- End of Startup Group Spawn
-
--- Zone Capture
-
-local function zone_capture()
-    zone_set[SIDE.NEUTRAL]:ForEachZone(
-        function(_zone)
-            _zone:Scan({Object.Category.UNIT}, {Unit.Category.GROUND_UNIT})
-
-            local _side = SIDE.NEUTRAL
-
-            if _zone:IsAllInZoneOfCoalition(SIDE.BLUE) then
-                _side = SIDE.BLUE
-            elseif _zone:IsAllInZoneOfCoalition(SIDE.RED) then
-                _side = SIDE.RED
-            end
-            
-            local _zone_index = _zone:GetName()
-
-            if zone_list[_zone_index] ~= _side then
-                zone_list[_zone_index] = _side
-                _zone:UndrawZone()
-                _zone:DrawZone(-1, { 1, 1, 1 }, 1, ZONE_COLOR[zone_list[_zone_index]], 0.25, 1, false)
-            end
-        end
-    )
-end
-
-TIMER:New(zone_capture):Start(5, 30)
-
--- End of Zone Capture
-
--- Base Protect
-
+-- Airport protection
 local client_set = SET_CLIENT:New():FilterActive(true):FilterStart()
 
-local function base_protect()
-    local function _check_client_side(_client, _zone, _zone_side)
-        if _client:GetCoalition() ~= _zone_side then
+local function airport_protect()
+    local function _check_client_side(_client, _airport, _airport_side)
+        if _client:GetCoalition() ~= _airport_side then
             MESSAGE:New("请立即离开敌军基地！否则您将在15秒后被强制摧毁！"):ToClient(_client, 15)
 
             TIMER:New(
                 function()
-                    if _client:IsInZone(_zone) then
+                    if _client:IsInZone(_airport) then
                         _client:Destroy(true)
                     end
                 end
@@ -399,21 +170,62 @@ local function base_protect()
         end
     end
 
-    for key, value in pairs({SIDE.BLUE, SIDE.RED}) do
-        zone_set[value]:ForEachZone(
+    for key, value in pairs(airports) do
+        local _airport = ZONE:FindByName(key)
+        client_set:ForEachClientInZone(_airport, _check_client_side, _airport, value)
+    end
+end
+
+TIMER:New(airport_protect):Start(30, 30)
+
+-- End of Airports
+
+-- Zones
+
+-- Draw zones
+draw_zones(zones)
+
+local function draw_zone_names(_zones)
+    for key, value in pairs(_zones) do
+        local _zone = ZONE:FindByName(key)
+        _zone:GetCoordinate():TextToAll(_zone:GetName(), -1, {0, 0, 0}, 0.75, nil, 0, 18, true)
+    end
+end
+
+draw_zone_names(zones)
+
+-- Zone status update
+local function zone_update()
+    local _set_zones = get_all_zones(zones)
+
+    for key, value in pairs(_set_zones) do
+        value:ForEachZone(
             function(_zone)
-                client_set:ForEachClientInZone(_zone, _check_client_side, _zone, value)
+                _zone:Scan({Object.Category.UNIT}, {Unit.Category.GROUND_UNIT})
+
+                local _side = SIDE.NEUTRAL
+
+                if _zone:IsAllInZoneOfCoalition(SIDE.BLUE) then
+                    _side = SIDE.BLUE
+                elseif _zone:IsAllInZoneOfCoalition(SIDE.RED) then
+                    _side = SIDE.RED
+                end
+                
+                local _zone_index = _zone:GetName()
+
+                if zones[_zone_index] ~= _side then
+                    zones[_zone_index] = _side
+                    _zone:UndrawZone()
+                    _zone:DrawZone(-1, { 1, 1, 1 }, 1, ZONE_COLOR[zones[_zone_index]], 0.25, 1, false)
+                end
             end
         )
     end
 end
 
-TIMER:New(base_protect):Start(90, 30)
+TIMER:New(zone_update):Start(2, 30)
 
--- End of Base Protect
-
--- Side Scores
-
+-- Scores
 local function calculate_side_scores()
     local _captured_zones = {
         [SIDE.BLUE] = 0,
@@ -421,7 +233,7 @@ local function calculate_side_scores()
         [SIDE.NEUTRAL] = 0,
     }
 
-    for key, value in pairs(zone_list) do
+    for key, value in pairs(zones) do
         _captured_zones[value] = _captured_zones[value] + 1
     end
 
@@ -469,7 +281,370 @@ end
 
 TIMER:New(calculate_side_scores):Start(15, 60)
 
--- End of Side Scores
+-- End of Zones
+
+-- Groups
+
+-- Group template
+local group_template = {
+    [GROUP_TYPE.GROUND_ATTACK] = {
+        -- Armory
+        "BTR80",
+        "BTR82A",
+        "M1126",
+        "Warrior",
+        "Challenger",
+        "Leclerc",
+        "Leopard2A6M",
+        "M1A2",
+        "MerkavaIV",
+        "Type59",
+        "StrykerMGS",
+        "ZBD04A",
+        "ZTZ96B",
+    },
+    [GROUP_TYPE.GROUND_DEFENSE] = {
+        -- Air Defense
+        "Avenger",
+        "Bradley",
+        "Roland",
+        "SA13",
+        "SA19",
+        "SA9",
+        "Gepard",
+        "M163",
+        "ZSU234",
+        "ZSU572",
+
+        -- Infantry
+        "SA18",
+        "Stinger",
+    },
+    [GROUP_TYPE.GROUND_TRANSPORT] = {
+        -- Unarmed
+        "Tigr",
+        "M978",
+        "GAZ66",
+        "KAMAZ43101",
+        "KrAZ6322",
+        "M939",
+        "Ural375",
+        "Ural4320T",
+    },
+    [GROUP_TYPE.HELI_ATTACK] = {
+        "AH64D",
+        "Ka50",
+        "Ka50_3",
+        "Mi24P",
+    },
+    [GROUP_TYPE.HELI_TRANSPORT] = {
+        "CH47D",
+        "Mi8",
+        "UH1H",
+        "UH60A",
+    },
+}
+
+local group_template_disabled = {
+    -- Air Defense
+    "HQ7",
+    "SA11",
+    "SA15",
+    "SA6",
+    "SA8",
+
+    -- Armory
+    "BTRRD",
+    "HMMWV",
+    "BMP3",
+    "M2A2",
+    "T72B3",
+    "T80U",
+    "T90",
+
+    -- Artillery
+    "BM27",
+    "BM21",
+    "PLZ05",
+    "2S3",
+    "M109",
+    "2S9",
+
+    -- Helicopter
+}
+
+-- Destroy all groups templates at mission start
+for key, value in pairs(GROUP_TYPE) do
+    destroy_groups(group_template[value])
+end
+
+destroy_groups(group_template_disabled)
+
+local group_spawn_index = {
+    [SIDE.BLUE] = 0,
+    [SIDE.RED] = 0,
+}
+
+local on_group_spawn = nil
+
+-- Spawn random group
+local function group_spawn_random(_side, _type, _spawn_zone, _target_zone)
+    -- TODO move to caller
+    if _spawn_zone == nil then
+        local _set_airports = get_all_zones(airports)
+        _spawn_zone = _set_airports[_side]:GetRandomZone()
+    end
+
+    -- TODO move to caller
+    if _target_zone == nil then
+        local _set_zones = get_all_zones(zones)
+        local _set_zones_spawn = combine_set_zones({_set_zones[SIDE_ENEMY[_side]], _set_zones[SIDE.NEUTRAL]})
+
+        if _type == GROUP_TYPE.HELI_TRANSPORT then
+            _set_zones_spawn = combine_set_zones({_set_zones_spawn, _set_zones[_side]})
+        end
+
+        _target_zone = _set_zones_spawn:GetRandomZone()
+    end
+
+    local _spawn_area_set = SET_ZONE:New():FilterPrefixes(_spawn_zone:GetName() .. "_Spawn_"):FilterOnce()
+
+    local _spawn_area = nil
+    
+    if _spawn_area_set:Count() ~= 0 then
+        _spawn_area = _spawn_area_set:GetRandomZone()
+    else
+        _spawn_area = _spawn_zone
+    end
+
+    local _spawn_template = get_random(group_template[_type])
+    local _group_spawn_index = group_spawn_index[_side]
+    group_spawn_index[_side] = group_spawn_index[_side] + 1
+    
+    local _group_name = NAME_PREFIX[_side] .. "-" .. _spawn_template .. "-" .. _spawn_zone:GetName() .. "-" .. _target_zone:GetName() .. "-" .. _group_spawn_index
+
+    SPAWN:NewWithAlias(_spawn_template, _group_name)
+        :InitCoalition(_side)
+        :InitCountry(COUNTRY[_side])
+        :InitSkill("Excellent")
+        :InitHeading(0, 359)
+        :OnSpawnGroup(on_group_spawn, _side, _type, _spawn_zone, _spawn_area, _target_zone)
+        :SpawnInZone(_spawn_area, true)
+end
+
+-- Specific tasks for different types of groups
+
+local group_tasks = {
+    [GROUP_TYPE.GROUND_ATTACK] = nil,
+    [GROUP_TYPE.GROUND_DEFENSE] = nil,
+    [GROUP_TYPE.GROUND_TRANSPORT] = nil,
+    [GROUP_TYPE.HELI_ATTACK] = nil,
+    [GROUP_TYPE.HELI_TRANSPORT] = nil,
+}
+
+-- On group spawn
+on_group_spawn = function(_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
+
+    -- Handle Dead Events
+    function _group:OnEventDead(EventData)
+        -- TODO Add Scores to Players
+    end
+
+    _group:HandleEvent(EVENTS.Dead)
+
+    -- Group spawn as immortal
+    _group:SetCommandImmortal(true)
+    TIMER:New(
+        function()
+            _group:SetCommandImmortal(false)
+        end
+    ):Start(15)
+
+    -- Specific handles for different types of groups
+    if _group:IsAir() then
+        _group:OptionROEWeaponFree()
+        _group:OptionROTEvadeFire()
+        _group:OptionAlarmStateRed()
+
+        if _group:IsHelicopter() then
+            function _group:OnEventHit(EventData)
+                -- TODO GROUP:RouteRTB() would likely cause game crash
+                -- local _airbase = _spawn_zone:GetCoordinate():GetClosestAirbase(nil, _side)
+                -- self:RouteRTB(_airbase)
+            end
+
+            _group:HandleEvent(EVENTS.Hit)
+        end
+    elseif _group:IsGround() then
+        _group:TaskRouteToZone(_target_zone, true, 100, "On Road")
+        _group:PatrolZones({_target_zone}, 100, "On Road", 30, 180)
+
+        local function _check_ground_group_stuck(_previous_coordinate, _previous_stucked)
+            -- Exit if group is dead
+            if _group == nil or _group:IsActive() == nil then
+                log("_check_ground_group_stuck: group is dead")
+                return
+            end
+
+            -- Check if group is stucked
+            local _current_coordinate = _group:GetCoordinate()
+            local _current_stucked = false
+
+            if _previous_stucked then
+                if _current_coordinate:Get2DDistance(_previous_coordinate) < 15 then
+                    log("Group " .. _group:GetName() .. " is stucked") -- Debug
+
+                    _current_stucked = true
+
+                    _group:ClearTasks()
+                    _group:TaskRouteToVec2(_group:GetCoordinate():GetRandomVec2InRadius(150, 300), 25, "Off Road")
+                else
+                    log("Group " .. _group:GetName() .. " has recovered from stuck") -- Debug
+
+                    _group:TaskRouteToZone(_target_zone, true, 100, "On Road")
+                    _group:PatrolZones({_target_zone}, 100, "On Road", 30, 180)
+                end
+            end
+            TIMER:New(_check_ground_group_stuck, _group:GetCoordinate(), _current_stucked):Start(180)
+        end
+
+        TIMER:New(_check_ground_group_stuck, _group:GetCoordinate(), false):Start(180)
+    end
+
+    -- Assign tasks to groups
+    if group_tasks[_type] ~= nil then
+        group_tasks[_type](_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
+    end
+end
+
+-- Group tasks implementation
+
+group_tasks[GROUP_TYPE.HELI_ATTACK] = function(_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
+    _group:EnRouteTaskEngageTargets(10000, {"All"})
+    _group:TaskRouteToZone(_target_zone, true, 100)
+
+    -- Handle land event
+    function _group:OnEventLand(EventData)
+        TIMER:New(
+            function()
+                self:Destroy(false)
+
+                if self == nil or self:IsActive() == nil then
+                    return
+                end
+            end
+        ):Start(90)
+    end
+
+    _group:HandleEvent(EVENTS.Land)
+end
+
+group_tasks[GROUP_TYPE.HELI_TRANSPORT] = function(_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
+    local _set_landing_zones = SET_ZONE:New():FilterPrefixes("LZ_" .. _target_zone:GetName() .. "_" .. NAME_PREFIX[_side]):FilterOnce()
+    
+    local _landing_zone = nil
+
+    if _set_landing_zones:Count() ~= 0 then
+        _landing_zone = _set_landing_zones:GetRandomZone()
+    else
+        _landing_zone = _target_zone
+    end
+
+    group_task_land_at_zone(_group, _landing_zone)
+
+    -- Handle land event
+    function _group:OnEventLand(EventData)
+        TIMER:New(
+            function()
+                if self == nil or self:IsActive() == nil then
+                    return
+                end
+
+                self:Destroy(false)
+
+                if self:IsInZone(_landing_zone) then
+                    local _group_spawn_types = {
+                        GROUP_TYPE.GROUND_ATTACK
+                    }
+
+                    if zones[_target_zone:GetName()] == _side then
+                        table.insert(_group_spawn_types, GROUP_TYPE.GROUND_DEFENSE)
+                        table.insert(_group_spawn_types, GROUP_TYPE.GROUND_TRANSPORT)
+                    end
+
+                    local _group_spawn_type = get_random(_group_spawn_types)
+
+                    local _side_name = "blue"
+                    if _side == SIDE.RED then
+                        _side_name = "red"
+                    end
+
+                    -- TODO Decide target zone before spawning transport helicopters
+                    local _set_groups_in_zones = SET_GROUP:New()
+                        :FilterZones({_target_zone})
+                        :FilterCoalitions(_side_name)
+                        :FilterCategoryGround()
+                        :FilterActive(true)
+                        :FilterStart()
+                    
+                    local _count_groups, _count_units = _set_groups_in_zones:CountAlive()
+
+                    if _count_groups <= 5 then
+                        group_spawn_random(_side, _group_spawn_type, _landing_zone, _target_zone)
+                    else
+                        log("group_tasks[GROUP_TYPE.HELI_TRANSPORT] OnEventLand: Group limit exceed, count = " .. _count_groups .. ", zone = " .. _target_zone:GetName() .. ", side " .. _side) -- Debug
+                    end
+                else
+                    log("group_tasks[GROUP_TYPE.HELI_TRANSPORT] OnEventLand: Group " .. self:GetName() " did not land in its target zone") -- Debug
+                end
+            end
+        ):Start(90)
+    end
+
+    _group:HandleEvent(EVENTS.Land)
+end
+
+TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_TRANSPORT):Start(180, 180)
+TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_TRANSPORT):Start(180, 180)
+
+TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_ATTACK):Start(300, 300)
+TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_ATTACK):Start(300, 300)
+
+-- Spawn groups in zones at startup
+local function group_spawn_startup()
+    local _set_zones = get_all_zones(zones)
+
+    for key, value in pairs({SIDE.BLUE, SIDE.RED}) do
+        _set_zones[value]:ForEachZone(
+            function(_zone)
+                for i = 1, 2 do
+                    group_spawn_random(value, GROUP_TYPE.GROUND_ATTACK, _zone, _zone)
+                end
+                for i = 1, 3 do
+                    group_spawn_random(value, GROUP_TYPE.GROUND_DEFENSE, _zone, _zone)
+                end
+            end
+        )
+    end
+end
+
+TIMER:New(group_spawn_startup):Start(1)
+
+-- Cleanup dead Groups
+
+local function cleanup_dead_groups()
+    SET_GROUP:New():FilterStart():ForEachGroup(
+        function(_group)
+            if _group == nil or _group:IsActive() == nil then
+                _group:Destroy(false)
+            end
+        end
+    )
+end
+
+TIMER:New(cleanup_dead_groups):Start(300, 300)
+
+-- End of Groups
 
 -- Scheduled Restart
 
