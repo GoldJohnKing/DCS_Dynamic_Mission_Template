@@ -144,15 +144,15 @@ LEVEL_DOT = {
 	[5000]	= {aircraft_symbol_near				, "LeftBottom"	,0.75	, 0.7	, -9	, 18},
 	-- [10000]	= {aircraft_symbol_near ..DISTANCE	, "LeftBottom"	,0.75	, 0.5	, -9	, 18},
 	-- [20000]	= {aircraft_symbol_far ..DISTANCE 	, "LeftBottom"	,0.25	, 0.25	, -9	, 18},
-	[10000]	= dot_symbol(0,0.1),
+	[15000]	= dot_symbol(0,0.1),
 	},
 
 	GroundFormat = {
 	--[distance]		= {format , alignment, color_blending_k, opacity, shift_in_pixels_x, shift_in_pixels_y}
-	[1000]	= EMPTY,
-	[7500]	= {ground_symbol_near				,"LeftBottom"	,0.75	, 0.7	, -9	, 18},
-	[15000]	= {ground_symbol_far				,"LeftBottom"	,0.75	, 0.5	, -9	, 18},
-	[20000]	=  dot_symbol(0.75, 0.1),
+	[10]	= EMPTY,
+	[5000]	= {ground_symbol_near				,"LeftBottom"	,0.75	, 0.7	, -9	, 18},
+	-- [10000]	= {ground_symbol_far				,"LeftBottom"	,0.75	, 0.5	, -9	, 18},
+	[12500]	=  dot_symbol(0.75, 0.1),
 	},
 
 	NavyFormat = {
@@ -167,8 +167,8 @@ LEVEL_DOT = {
 	--[distance]		= {format ,alignment, color_blending_k, opacity, shift_in_pixels_x, shift_in_pixels_y}
 	[5]	    = EMPTY,
 	[10000]	= {weapon_symbol_near ..DISTANCE_NAME	,"LeftBottom"	,0.75	, 0.7	, -9	, 18},
-	[25000]	= {weapon_symbol_far  ..DISTANCE		,"LeftBottom"	,0.75	, 0.5	, -9	, 18},
-	-- [20000]	= {weapon_symbol_far					,"LeftBottom"	,0.25	, 0.25	, -9	, 18},
+	[15000]	= {weapon_symbol_far  ..DISTANCE		,"LeftBottom"	,0.75	, 0.5	, -9	, 18},
+	[20000]	= {weapon_symbol_far					,"LeftBottom"	,0.25	, 0.25	, -9	, 18},
 	},
 	--------------------------------------------------------
 	ColorAliesSide   		= ColorAliesSide,   		

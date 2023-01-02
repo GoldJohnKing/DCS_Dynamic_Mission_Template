@@ -29,9 +29,11 @@ local GROUP_TYPE = {
     GROUND_ATTACK = 0,
     GROUND_DEFENSE = 1,
     GROUND_TRANSPORT = 2,
-    HELI_ATTACK = 3,
-    HELI_TRANSPORT = 4,
-    PLANE = 5,
+    GROUND_ARMED = 3,
+    GROUND_UNARMED = 4,
+    HELI_ATTACK = 5,
+    HELI_TRANSPORT = 6,
+    PLANE = 7,
 }
 
 local NAME_PREFIX = {
@@ -51,6 +53,14 @@ local function get_random(tb)
     end
 
     return tb[keys[math.random(#keys)]]
+end
+
+local function table_merge(_table_destination, _table_source)
+    for key, value in pairs(_table_source) do
+        table.insert(_table_destination, value)
+    end
+
+    return _table_destination
 end
 
 local function message_to_all(_text, _lasts_time)
@@ -305,18 +315,21 @@ local group_template = {
         "Leopard2A6M",
         "M1A2",
         "MerkavaIV",
+        "T72B3",
         "Type59",
         "StrykerMGS",
-        "ZBD04A",
-        "ZTZ96B",
+
+        -- Artillery
+        "PLZ05",
+        "2S3",
+        "M109",
+        "2S9",
     },
     [GROUP_TYPE.GROUND_DEFENSE] = {
         -- Air Defense
         "Avenger",
-        "Bradley",
         "Roland",
         "SA13",
-        "SA19",
         "SA9",
         "Gepard",
         "M163",
@@ -338,14 +351,17 @@ local group_template = {
         "Ural375",
         "Ural4320T",
     },
+    [GROUP_TYPE.GROUND_ARMED] = {},
+    [GROUP_TYPE.GROUND_UNARMED] = {},
     [GROUP_TYPE.HELI_ATTACK] = {
+        "AH1W",
         "AH64D",
-        "Ka50",
         "Ka50_3",
         "Mi24P",
     },
     [GROUP_TYPE.HELI_TRANSPORT] = {
         "CH47D",
+        "Mi26",
         "Mi8",
         "UH1H",
         "UH60A",
@@ -357,28 +373,33 @@ local group_template_disabled = {
     "HQ7",
     "SA11",
     "SA15",
+    "SA19",
     "SA6",
     "SA8",
 
     -- Armory
+    "Bradley",
     "BTRRD",
     "HMMWV",
     "BMP3",
     "M2A2",
-    "T72B3",
     "T80U",
     "T90",
+    "ZBD04A",
+    "ZTZ96B",
 
     -- Artillery
     "BM27",
     "BM21",
-    "PLZ05",
-    "2S3",
-    "M109",
-    "2S9",
 
     -- Helicopter
+    "Mi28N",
+    "Ka50",
 }
+
+table_merge(group_template[GROUP_TYPE.GROUND_ARMED], group_template[GROUP_TYPE.GROUND_ATTACK])
+table_merge(group_template[GROUP_TYPE.GROUND_ARMED], group_template[GROUP_TYPE.GROUND_DEFENSE])
+table_merge(group_template[GROUP_TYPE.GROUND_UNARMED], group_template[GROUP_TYPE.GROUND_TRANSPORT])
 
 -- Destroy all groups templates at mission start
 for key, value in pairs(GROUP_TYPE) do
@@ -445,13 +466,14 @@ local group_tasks = {
     [GROUP_TYPE.GROUND_ATTACK] = nil,
     [GROUP_TYPE.GROUND_DEFENSE] = nil,
     [GROUP_TYPE.GROUND_TRANSPORT] = nil,
+    [GROUP_TYPE.GROUND_ARMED] = nil,
+    [GROUP_TYPE.GROUND_UNARMED] = nil,
     [GROUP_TYPE.HELI_ATTACK] = nil,
     [GROUP_TYPE.HELI_TRANSPORT] = nil,
 }
 
 -- On group spawn
 on_group_spawn = function(_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
-
     -- Handle Dead Events
     function _group:OnEventDead(EventData)
         -- TODO Add Scores to Players
@@ -614,8 +636,8 @@ end
 TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_TRANSPORT):Start(90, 90)
 TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_TRANSPORT):Start(90, 90)
 
-TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_ATTACK):Start(180, 180)
-TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_ATTACK):Start(180, 180)
+TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_ATTACK):Start(300, 300)
+TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_ATTACK):Start(300, 300)
 
 -- Spawn groups in zones at startup
 local function group_spawn_startup()
