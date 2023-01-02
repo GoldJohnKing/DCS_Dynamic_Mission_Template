@@ -1,4 +1,10 @@
 mapResource = 
 {
+    ["ResKey_ImageBriefing_8"] = "title.jpg",
+    ["ResKey_ImageBriefing_13"] = "pay.jpg",
+    ["ResKey_ImageBriefing_9"] = "pay.jpg",
+    ["ResKey_ImageBriefing_11"] = "pay.jpg",
+    ["ResKey_ImageBriefing_12"] = "title.jpg",
+    ["ResKey_ImageBriefing_10"] = "title.jpg",
     ["ResKey_Action_6"] = "Load_Scripts.lua",
 } -- end of mapResource
