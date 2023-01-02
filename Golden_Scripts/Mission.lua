@@ -131,6 +131,7 @@ local side_scores = {
 }
 
 local side_winning_scores = 5000
+local scores_per_zone = 10
 
 local airports = {
     ["Dubai"] = SIDE.RED,
@@ -237,20 +238,26 @@ local function calculate_side_scores()
         _captured_zones[value] = _captured_zones[value] + 1
     end
 
+    local _scores_increment = {
+        [SIDE.BLUE] = 0,
+        [SIDE.RED] = 0,
+    }
+
     for key, value in pairs(side_scores) do
-        side_scores[key] = side_scores[key] + 10 * _captured_zones[key]
+        _scores_increment[key] = scores_per_zone * _captured_zones[key]
+        side_scores[key] = side_scores[key] + _scores_increment[key]
     end
 
     message_to_all(
         "=== 阵营得分状态 ===\n" ..
         "\n[蓝方]" ..
         "\n - 占领区数量: " .. _captured_zones[SIDE.BLUE] ..
-        "\n - 每分钟固定收益: " .. 5 * _captured_zones[SIDE.BLUE] ..
+        "\n - 每分钟固定收益: " .. _scores_increment[SIDE.BLUE] ..
         "\n - 当前总得分: " .. side_scores[SIDE.BLUE] ..
         "\n" ..
         "\n[红方]" ..
         "\n - 占领区数量: " .. _captured_zones[SIDE.RED] ..
-        "\n - 每分钟固定收益: " .. 5 * _captured_zones[SIDE.RED] ..
+        "\n - 每分钟固定收益: " .. _scores_increment[SIDE.RED] ..
         "\n - 当前总得分: " .. side_scores[SIDE.RED] ..
         "\n" ..
         "\n中立区数量: " .. _captured_zones[SIDE.NEUTRAL] ..
@@ -604,11 +611,11 @@ group_tasks[GROUP_TYPE.HELI_TRANSPORT] = function(_group, _side, _type, _spawn_z
     _group:HandleEvent(EVENTS.Land)
 end
 
-TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_TRANSPORT):Start(180, 180)
-TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_TRANSPORT):Start(180, 180)
+TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_TRANSPORT):Start(90, 90)
+TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_TRANSPORT):Start(90, 90)
 
-TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_ATTACK):Start(300, 300)
-TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_ATTACK):Start(300, 300)
+TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_ATTACK):Start(180, 180)
+TIMER:New(group_spawn_random, SIDE.RED, GROUP_TYPE.HELI_ATTACK):Start(180, 180)
 
 -- Spawn groups in zones at startup
 local function group_spawn_startup()
