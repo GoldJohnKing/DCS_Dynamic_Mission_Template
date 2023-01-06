@@ -87,7 +87,7 @@ local function get_all_zones(_zones)
         [SIDE.RED] = SET_ZONE:New(),
         [SIDE.NEUTRAL] = SET_ZONE:New(),
     }
-    
+
     for key, value in pairs(_zones) do
         _set_zones[value]:AddZonesByName(key)
     end
@@ -116,17 +116,19 @@ local function destroy_groups(_group_names)
 end
 
 local function group_task_land_at_zone(_group, _landing_zone)
-    local _task_land = {
-        id = 'Land',
-        params = {
-            point = _landing_zone:GetRandomVec2(),
-        }
-    }
-
+    local _task_land = _group:TaskLandAtZone(_landing_zone, nil, true)
     local _waypoint = _landing_zone:GetCoordinate():WaypointAirTurningPoint()
 
     _group:SetTaskWaypoint(_waypoint, _task_land)
     _group:Route({_waypoint}, 1)
+end
+
+local function group_is_alive(_group)
+    return _group ~= nil and _group:IsAlive() == true and _group:CountAliveUnits() ~= 0
+end
+
+local function group_is_dead(_group)
+    return not group_is_alive(_group)
 end
 
 -- End of Utils
@@ -221,7 +223,7 @@ local function zone_update()
                 elseif _zone:IsAllInZoneOfCoalition(SIDE.RED) then
                     _side = SIDE.RED
                 end
-                
+
                 local _zone_index = _zone:GetName()
 
                 if zones[_zone_index] ~= _side then
@@ -438,7 +440,7 @@ local function group_spawn_random(_side, _type, _spawn_zone, _target_zone)
     local _spawn_area_set = SET_ZONE:New():FilterPrefixes(_spawn_zone:GetName() .. "_Spawn_"):FilterOnce()
 
     local _spawn_area = nil
-    
+
     if _spawn_area_set:Count() ~= 0 then
         _spawn_area = _spawn_area_set:GetRandomZone()
     else
@@ -448,7 +450,7 @@ local function group_spawn_random(_side, _type, _spawn_zone, _target_zone)
     local _spawn_template = get_random(group_template[_type])
     local _group_spawn_index = group_spawn_index[_side]
     group_spawn_index[_side] = group_spawn_index[_side] + 1
-    
+
     local _group_name = NAME_PREFIX[_side] .. "-" .. _spawn_template .. "-" .. _spawn_zone:GetName() .. "-" .. _target_zone:GetName() .. "-" .. _group_spawn_index
 
     SPAWN:NewWithAlias(_spawn_template, _group_name)
@@ -570,7 +572,7 @@ end
 
 group_tasks[GROUP_TYPE.HELI_TRANSPORT] = function(_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
     local _set_landing_zones = SET_ZONE:New():FilterPrefixes("LZ_" .. _target_zone:GetName() .. "_" .. NAME_PREFIX[_side]):FilterOnce()
-    
+
     local _landing_zone = nil
 
     if _set_landing_zones:Count() ~= 0 then
