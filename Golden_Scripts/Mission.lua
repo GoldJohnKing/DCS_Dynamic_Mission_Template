@@ -478,6 +478,11 @@ local group_tasks = {
     [GROUP_TYPE.HELI_TRANSPORT] = nil,
 }
 
+local group_status_check = {
+    ground = nil,
+    air = nil,
+}
+
 -- On group spawn
 on_group_spawn = function(_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
     -- Handle Dead Events
@@ -513,40 +518,17 @@ on_group_spawn = function(_group, _side, _type, _spawn_zone, _spawn_area, _targe
 
             _group:HandleEvent(EVENTS.Hit)
         end
+
+        if group_status_check.air ~= nil then
+            TIMER:New(group_status_check.air, _group, false):Start(180)
+        end
     elseif _group:IsGround() then
         _group:TaskRouteToZone(_target_zone, true, 100, "On Road")
         _group:PatrolZones({_target_zone}, 100, "On Road", 30, 180)
 
-        local function _check_ground_group_stuck(_previous_coordinate, _previous_stucked)
-            -- Exit if group is dead
-            if group_is_dead(_group) then
-                log("_check_ground_group_stuck: group is dead")
-                return
-            end
-
-            -- Check if group is stucked
-            local _current_coordinate = _group:GetCoordinate()
-            local _current_stucked = false
-
-            if _previous_stucked then
-                if _current_coordinate:Get2DDistance(_previous_coordinate) < 15 then
-                    log("Group " .. _group:GetName() .. " is stucked") -- Debug
-
-                    _current_stucked = true
-
-                    _group:ClearTasks()
-                    _group:TaskRouteToVec2(_group:GetCoordinate():GetRandomVec2InRadius(150, 300), 25, "Off Road")
-                else
-                    log("Group " .. _group:GetName() .. " has recovered from stuck") -- Debug
-
-                    _group:TaskRouteToZone(_target_zone, true, 100, "On Road")
-                    _group:PatrolZones({_target_zone}, 100, "On Road", 30, 180)
-                end
-            end
-            TIMER:New(_check_ground_group_stuck, _group:GetCoordinate(), _current_stucked):Start(180)
+        if group_status_check.ground ~= nil then
+            TIMER:New(group_status_check.ground, _group, _target_zone, _group:GetCoordinate(), false):Start(180)
         end
-
-        TIMER:New(_check_ground_group_stuck, _group:GetCoordinate(), false):Start(180)
     end
 
     -- Assign tasks to groups
@@ -632,6 +614,65 @@ group_tasks[GROUP_TYPE.HELI_TRANSPORT] = function(_group, _side, _type, _spawn_z
     end
 
     _group:HandleEvent(EVENTS.Land)
+end
+
+-- Group stuck check implementation
+
+group_status_check.air = function(_group, _previous_landed)
+    -- Exit if group is dead
+    if group_is_dead(_group) then
+        log("group_status_check.air: group is dead")
+        return
+    else
+        log("Group " .. _group:GetName() .. " is not dead, perform land check") -- Debug
+    end
+
+    -- Check if group is landed
+    local _current_landed = _group:AllOnGround()
+
+    if _previous_landed and _current_landed then
+        log("Group " .. _group:GetName() .. " is landed") -- Debug
+
+        _group:Destroy(false)
+        
+        return
+    end
+
+    TIMER:New(group_status_check.air, _group, _current_landed):Start(90)
+end
+
+group_status_check.ground = function(_group, _target_zone, _previous_coordinate, _previous_stuck)
+    -- Exit if group is dead
+    if group_is_dead(_group) then
+        log("group_status_check.air: group is dead")
+        return
+    else
+        log("Group " .. _group:GetName() .. " is not dead, perform stuck check") -- Debug
+    end
+
+    -- Check if group is stuck
+    local _current_coordinate = _group:GetCoordinate()
+    local _current_stuck = false
+
+    if _current_coordinate:Get2DDistance(_previous_coordinate) < 15 then
+        _current_stuck = true
+    end
+
+    if _previous_stuck then
+        if _current_stuck then
+            log("Group " .. _group:GetName() .. " is stuck") -- Debug
+
+            _group:ClearTasks()
+            _group:TaskRouteToVec2(_group:GetCoordinate():GetRandomVec2InRadius(150, 300), 25, "Off Road")
+        else
+            log("Group " .. _group:GetName() .. " has recovered from stuck") -- Debug
+
+            _group:TaskRouteToZone(_target_zone, true, 100, "On Road")
+            _group:PatrolZones({_target_zone}, 100, "On Road", 30, 180)
+        end
+    end
+
+    TIMER:New(group_status_check.ground, _group, _target_zone, _current_coordinate, _current_stuck):Start(90)
 end
 
 TIMER:New(group_spawn_random, SIDE.BLUE, GROUP_TYPE.HELI_TRANSPORT):Start(90, 90)
