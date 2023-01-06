@@ -123,6 +123,14 @@ local function group_task_land_at_zone(_group, _landing_zone)
     _group:Route({_waypoint}, 1)
 end
 
+local function group_task_orbit_at_zone(_group, _target_zone, _altitude, _speed)
+    local _task_orbit = _group:TaskOrbitCircleAtVec2(_target_zone:GetRandomPointVec2(), _altitude, _speed)
+    local _waypoint = _target_zone:GetCoordinate():WaypointAirTurningPoint()
+
+    _group:SetTaskWaypoint(_waypoint, _task_orbit)
+    _group:Route({_waypoint}, 1)
+end
+
 local function group_is_alive(_group)
     return _group ~= nil and _group:IsAlive() == true and _group:CountAliveUnits() ~= 0
 end
@@ -509,7 +517,6 @@ on_group_spawn = function(_group, _side, _type, _spawn_zone, _spawn_area, _targe
         if _group:IsHelicopter() then
             function _group:OnEventHit(EventData)
                 if group_is_damaged(_group) then
-                    _group:ClearTasks()
                     group_task_land_at_zone(_group, _spawn_zone)
 
                     _group:UnHandleEvent(EVENTS.Hit)
@@ -540,8 +547,7 @@ end
 -- Group tasks implementation
 
 group_tasks[GROUP_TYPE.HELI_ATTACK] = function(_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
-    _group:EnRouteTaskEngageTargets(10000, {"All"})
-    _group:TaskRouteToZone(_target_zone, true, 100)
+    group_task_orbit_at_zone(_group, _target_zone, 100, 50)
 
     -- Handle land event
     function _group:OnEventLand(EventData)
