@@ -131,6 +131,10 @@ local function group_is_dead(_group)
     return not group_is_alive(_group)
 end
 
+local function group_is_damaged(_group)
+    return _group:GetLife() < _group:GetLife0() - 1
+end
+
 -- End of Utils
 
 message_to_all("Mission.lua Loading", 3) -- Debug
@@ -499,9 +503,12 @@ on_group_spawn = function(_group, _side, _type, _spawn_zone, _spawn_area, _targe
 
         if _group:IsHelicopter() then
             function _group:OnEventHit(EventData)
-                -- TODO GROUP:RouteRTB() would likely cause game crash
-                -- local _airbase = _spawn_zone:GetCoordinate():GetClosestAirbase(nil, _side)
-                -- self:RouteRTB(_airbase)
+                if group_is_damaged(_group) then
+                    _group:ClearTasks()
+                    group_task_land_at_zone(_group, _spawn_zone)
+
+                    _group:UnHandleEvent(EVENTS.Hit)
+                end
             end
 
             _group:HandleEvent(EVENTS.Hit)
@@ -512,7 +519,7 @@ on_group_spawn = function(_group, _side, _type, _spawn_zone, _spawn_area, _targe
 
         local function _check_ground_group_stuck(_previous_coordinate, _previous_stucked)
             -- Exit if group is dead
-            if _group == nil or _group:IsActive() == nil then
+            if group_is_dead(_group) then
                 log("_check_ground_group_stuck: group is dead")
                 return
             end
@@ -559,10 +566,6 @@ group_tasks[GROUP_TYPE.HELI_ATTACK] = function(_group, _side, _type, _spawn_zone
         TIMER:New(
             function()
                 self:Destroy(false)
-
-                if self == nil or self:IsActive() == nil then
-                    return
-                end
             end
         ):Start(90)
     end
@@ -587,11 +590,9 @@ group_tasks[GROUP_TYPE.HELI_TRANSPORT] = function(_group, _side, _type, _spawn_z
     function _group:OnEventLand(EventData)
         TIMER:New(
             function()
-                if self == nil or self:IsActive() == nil then
+                if group_is_dead(self) then
                     return
                 end
-
-                self:Destroy(false)
 
                 if self:IsInZone(_landing_zone) then
                     local _group_spawn_types = {
@@ -622,12 +623,10 @@ group_tasks[GROUP_TYPE.HELI_TRANSPORT] = function(_group, _side, _type, _spawn_z
 
                     if _count_groups <= 5 then
                         group_spawn_random(_side, _group_spawn_type, _landing_zone, _target_zone)
-                    else
-                        log("group_tasks[GROUP_TYPE.HELI_TRANSPORT] OnEventLand: Group limit exceed, count = " .. _count_groups .. ", zone = " .. _target_zone:GetName() .. ", side " .. _side) -- Debug
                     end
-                else
-                    log("group_tasks[GROUP_TYPE.HELI_TRANSPORT] OnEventLand: Group " .. self:GetName() " did not land in its target zone") -- Debug
                 end
+
+                self:Destroy(false)
             end
         ):Start(90)
     end
@@ -660,20 +659,6 @@ local function group_spawn_startup()
 end
 
 TIMER:New(group_spawn_startup):Start(1)
-
--- Cleanup dead Groups
-
-local function cleanup_dead_groups()
-    SET_GROUP:New():FilterStart():ForEachGroup(
-        function(_group)
-            if _group == nil or _group:IsActive() == nil then
-                _group:Destroy(false)
-            end
-        end
-    )
-end
-
-TIMER:New(cleanup_dead_groups):Start(300, 300)
 
 -- End of Groups
 
