@@ -124,7 +124,7 @@ local function group_task_land_at_zone(_group, _landing_zone)
 end
 
 local function group_task_orbit_at_zone(_group, _target_zone, _altitude, _speed)
-    local _task_orbit = _group:TaskOrbitCircleAtVec2(_target_zone:GetRandomPointVec2(), _altitude, _speed)
+    local _task_orbit = _group:TaskOrbitCircleAtVec2(_target_zone:GetRandomVec2(), _altitude, _speed)
     local _waypoint = _target_zone:GetCoordinate():WaypointAirTurningPoint()
 
     _group:SetTaskWaypoint(_waypoint, _task_orbit)
@@ -547,7 +547,7 @@ end
 -- Group tasks implementation
 
 group_tasks[GROUP_TYPE.HELI_ATTACK] = function(_group, _side, _type, _spawn_zone, _spawn_area, _target_zone)
-    group_task_orbit_at_zone(_group, _target_zone, 100, 50)
+    group_task_orbit_at_zone(_group, _target_zone, 100, 100)
 
     -- Handle land event
     function _group:OnEventLand(EventData)
